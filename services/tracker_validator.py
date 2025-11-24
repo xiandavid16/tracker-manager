@@ -23,7 +23,8 @@ class TrackerValidator:
         self._futures: List[Future] = []
         self.interface_binder = InterfaceBinder()
         self.bound_interface = None
-        self.current_external_ip = "Unknown"  # Track current WAN IP
+        self.current_external_ip = "Unknown"
+        self.is_validating = False
     
     def set_network_interface(self, interface_name):
         """Set specific network interface for validation"""
@@ -55,33 +56,43 @@ class TrackerValidator:
         """Signal to stop validation"""
         logger.info("Stopping validation")
         self._should_stop = True
+        self.is_validating = False  # ADD THIS LINE
         for future in self._futures:
             future.cancel()
     
     def reset_stop_flag(self):
         """Reset stop flag for new validation run"""
         self._should_stop = False
+        self.is_validating = True  # ADD THIS LINE
         self._futures.clear()
     
     def validate_batch(self, trackers: List[Tracker]) -> List[Tracker]:
         """Validate multiple trackers in parallel"""
         max_workers = self.config.get("validation.max_workers", 10)
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Store futures for potential cancellation
-            self._futures = [executor.submit(self.validate, tracker) for tracker in trackers]
-            
-            results = []
-            for future in self._futures:
-                if self._should_stop:
-                    break
-                try:
-                    result = future.result(timeout=self.config.get("validation.timeout", 10) + 5)
-                    results.append(result)
-                except Exception as e:
-                    logger.error(f"Validation task failed: {e}")
-            
-            return results
+        # Set validating state
+        self.is_validating = True
+        
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Store futures for potential cancellation
+                self._futures = [executor.submit(self.validate, tracker) for tracker in trackers]
+                
+                results = []
+                for future in self._futures:
+                    if self._should_stop:
+                        logger.info("Validation stopped during batch processing")
+                        break
+                    try:
+                        result = future.result(timeout=self.config.get("validation.timeout", 10) + 5)
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Validation task failed: {e}")
+                
+                return results
+        finally:
+            # Always reset validating state when done
+            self.is_validating = False
     
     def validate(self, tracker: Tracker) -> Tracker:
         """Validate a single tracker"""

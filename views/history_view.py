@@ -12,6 +12,8 @@ class HistoryView:
         self.controller = controller
         self.setup_gui()
     
+    # ===== GUI SETUP METHODS =====
+    
     def setup_gui(self):
         """Setup enhanced history tab GUI"""
         self.tab = ttk.Frame(self.parent)
@@ -28,16 +30,16 @@ class HistoryView:
         top_controls.pack(fill='x', pady=(0, 10))
         
         ttk.Button(top_controls, text="🔄 Refresh", 
-                  command=self.refresh_history).pack(side='left', padx=(0, 10))
+                command=self.refresh_history).pack(side='left', padx=(0, 10))
         
         ttk.Button(top_controls, text="⭐ Show Reliable",
-                  command=self.show_reliable).pack(side='left', padx=(0, 10))
+                command=self.show_reliable).pack(side='left', padx=(0, 10))
         
         ttk.Button(top_controls, text="❤️ Show Favorites",
-                  command=self.show_favorites).pack(side='left', padx=(0, 10))
+                command=self.show_favorites).pack(side='left', padx=(0, 10))
         
         ttk.Button(top_controls, text="🧹 Clear History",
-                  command=self.clear_history).pack(side='left')
+                command=self.clear_history).pack(side='left')
         
         # Bottom row - filters
         filter_frame = ttk.Frame(controls_frame)
@@ -47,10 +49,10 @@ class HistoryView:
         
         self.filter_var = tk.StringVar()
         self.filter_combo = ttk.Combobox(filter_frame, 
-                                       textvariable=self.filter_var,
-                                       values=["All", "Working Only", "Dead Only", "High Reliability (>90%)", "Medium Reliability (70-90%)", "Low Reliability (<70%)"],
-                                       state="readonly",
-                                       width=20)
+                                    textvariable=self.filter_var,
+                                    values=["All", "Working Only", "Dead Only", "High Reliability (>90%)", "Medium Reliability (70-90%)", "Low Reliability (<70%)"],
+                                    state="readonly",
+                                    width=20)
         self.filter_combo.set("All")
         self.filter_combo.pack(side='left', padx=(0, 10))
         self.filter_combo.bind('<<ComboboxSelected>>', self.apply_filter)
@@ -58,23 +60,24 @@ class HistoryView:
         ttk.Label(filter_frame, text="Limit:").pack(side='left', padx=(20, 5))
         
         self.limit_var = tk.StringVar(value="50")
-        limit_combo = ttk.Combobox(filter_frame, 
-                                 textvariable=self.limit_var,
-                                 values=["25", "50", "100", "250", "500", "All"],
-                                 state="readonly",
-                                 width=10)
-        limit_combo.pack(side='left', padx=(0, 10))
-        limit_combo.bind('<<ComboboxSelected>>', self.refresh_history)
+        self.limit_combo = ttk.Combobox(filter_frame,
+                                    textvariable=self.limit_var,
+                                    values=["25", "50", "100", "250", "500", "All"],
+                                    state="readonly",
+                                    width=10)
+        self.limit_combo.pack(side='left', padx=(0, 10))
+        self.limit_combo.bind('<<ComboboxSelected>>', self.refresh_history)
         
-        # Search box
+        # Search box - USE REGULAR TK ENTRY INSTEAD OF TTK FOR BETTER THEMING
         ttk.Label(filter_frame, text="Search:").pack(side='left', padx=(20, 5))
         self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(filter_frame, textvariable=self.search_var, width=20)
-        search_entry.pack(side='left', padx=(0, 5))
-        search_entry.bind('<KeyRelease>', self.apply_search)
+        self.search_entry = tk.Entry(filter_frame, textvariable=self.search_var, width=20,  # Changed to tk.Entry
+                                   bg="white", fg="black", insertbackground="black")  # Default light mode colors
+        self.search_entry.pack(side='left', padx=(0, 5))
+        self.search_entry.bind('<KeyRelease>', self.apply_search)
         
         ttk.Button(filter_frame, text="🔍", 
-                  command=self.apply_search, width=3).pack(side='left')
+                command=self.apply_search, width=3).pack(side='left')
         
         # Enhanced history table
         columns = ('URL', 'Status', 'Response Time', 'Last Checked', 'Success Rate', 'Checks', 'Type')
@@ -109,7 +112,7 @@ class HistoryView:
         
         # Enhanced bindings
         self.tree.bind('<Double-1>', self.on_double_click)
-        self.tree.bind('<Button-3>', self.show_context_menu)  # Right-click context menu
+        self.tree.bind('<Button-3>', self.show_context_menu)
         
         # Context menu
         self.context_menu = tk.Menu(self.tab, tearoff=0)
@@ -117,6 +120,10 @@ class HistoryView:
         self.context_menu.add_command(label="Copy URL", command=self.copy_selected_url)
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Validate Again", command=self.validate_selected)
+        
+        # Collect all labels for theming
+        self._label_widgets = []
+        self._collect_labels(self.tab)
         
         self.refresh_history()
     
@@ -154,60 +161,152 @@ class HistoryView:
         self.low_rel_label = tk.Label(stats_grid, text="Low Rel: 0", font=("Arial", 9))
         self.low_rel_label.grid(row=1, column=2, padx=10, pady=2, sticky='w')
     
-    def update_stats_dashboard(self, history):
-        """Update statistics dashboard with current data"""
-        if not history:
-            return
-            
-        total = len(history)
-        working = sum(1 for t in history if t.alive)
-        dead = total - working
-        
-        # Calculate average success rate
-        total_checks = sum(t.check_count for t in history)
-        successful_checks = sum(t.success_count for t in history)
-        avg_success = (successful_checks / total_checks * 100) if total_checks > 0 else 0
-        
-        # Reliability breakdown
-        high_rel = sum(1 for t in history if t.check_count >= 3 and (t.success_count / t.check_count) >= 0.9)
-        medium_rel = sum(1 for t in history if t.check_count >= 3 and 0.7 <= (t.success_count / t.check_count) < 0.9)
-        low_rel = sum(1 for t in history if t.check_count >= 3 and (t.success_count / t.check_count) < 0.7)
-        
-        # Update labels
-        self.total_label.config(text=f"Total: {total}")
-        self.working_label.config(text=f"Working: {working}")
-        self.dead_label.config(text=f"Dead: {dead}")
-        self.success_label.config(text=f"Avg Success: {avg_success:.1f}%")
-        self.reliability_label.config(text=f"High Rel: {high_rel}")
-        self.medium_rel_label.config(text=f"Med Rel: {medium_rel}")
-        self.low_rel_label.config(text=f"Low Rel: {low_rel}")
+    # ===== SIMPLIFIED THEMING METHODS =====
     
     def apply_theme(self, bg_color, fg_color, text_bg, text_fg):
-        """Apply theme to history tab widgets"""
+        """Apply theme to history tab widgets - SIMPLIFIED AND FOCUSED"""
         try:
-            # Style the treeview
-            style = ttk.Style()
-            style.configure("Treeview", 
-                          background=text_bg,
-                          foreground=fg_color,
-                          fieldbackground=text_bg,
-                          rowheight=25)
-            style.configure("Treeview.Heading",
-                          background=bg_color,
-                          foreground=fg_color,
-                          font=('Arial', 10, 'bold'))
-            style.map('Treeview', 
-                     background=[('selected', '#555555')],
-                     foreground=[('selected', text_fg)])
+            # Get dark mode state from main view
+            is_dark_mode = getattr(self.controller.main_view, 'is_dark_mode', False)
             
-            # Apply to the tab frame
-            self.tab.configure(style='TFrame')
+            if is_dark_mode:
+                # DARK MODE - Direct and simple approach
+                self._apply_dark_theme(bg_color, fg_color)
+            else:
+                # LIGHT MODE
+                self._apply_light_theme(bg_color, fg_color, text_bg)
             
-            # Refresh to show new colors
-            self.refresh_history()
+            # Theme all labels
+            self._theme_all_labels(bg_color, fg_color, is_dark_mode)
+            
+            # Theme context menu
+            self._theme_context_menu(bg_color, fg_color, is_dark_mode)
             
         except Exception as e:
             logger.debug(f"Could not theme history view: {e}")
+    
+    def _apply_dark_theme(self, bg_color, fg_color):
+        """Apply dark theme - FOCUSED ON SEARCH BAR"""
+        dark_bg = "#2a2a2a"
+        dark_fg = "#e8e8e8"
+        dark_select = "#404040"
+        
+        # SEARCH BAR - Most important fix
+        if hasattr(self, 'search_entry') and self.search_entry.winfo_exists():
+            self.search_entry.configure(
+                bg=dark_bg,
+                fg=dark_fg,
+                insertbackground=dark_fg,  # Cursor color
+                selectbackground=dark_select,
+                selectforeground=dark_fg,
+                relief="flat"
+            )
+        
+        # ComboBoxes
+        for combo in [self.filter_combo, self.limit_combo]:
+            if combo and combo.winfo_exists():
+                try:
+                    combo.configure(
+                        background=dark_bg,
+                        foreground=dark_fg
+                    )
+                except:
+                    pass  # If ttk combobox doesn't support direct styling
+    
+    def _apply_light_theme(self, bg_color, fg_color, text_bg):
+        """Apply light theme"""
+        if hasattr(self, 'search_entry') and self.search_entry.winfo_exists():
+            self.search_entry.configure(
+                bg=text_bg,
+                fg=fg_color,
+                insertbackground=fg_color,
+                selectbackground="#e0e0e0",
+                selectforeground=fg_color,
+                relief="sunken"
+            )
+        
+        # ComboBoxes
+        for combo in [self.filter_combo, self.limit_combo]:
+            if combo and combo.winfo_exists():
+                try:
+                    combo.configure(
+                        background=text_bg,
+                        foreground=fg_color
+                    )
+                except:
+                    pass
+    
+    def _theme_all_labels(self, bg_color, fg_color, is_dark_mode):
+        """Theme all labels in the history tab"""
+        # Apply to collected labels
+        for label in self._label_widgets:
+            if label and label.winfo_exists():
+                try:
+                    if is_dark_mode:
+                        if label in [self.total_label, self.working_label, self.dead_label, self.success_label]:
+                            label.configure(bg=bg_color, fg=fg_color, font=("Arial", 10, "bold"))
+                        elif label in [self.reliability_label, self.medium_rel_label, self.low_rel_label]:
+                            label.configure(bg=bg_color, fg="#cccccc", font=("Arial", 9))
+                        else:
+                            label.configure(bg=bg_color, fg=fg_color)
+                    else:
+                        label.configure(bg=bg_color, fg=fg_color)
+                except Exception as e:
+                    logger.debug(f"Could not theme label: {e}")
+        
+        # Apply recursive theming to catch any missed labels
+        self._theme_all_labels_recursive(self.tab, bg_color, fg_color)
+    
+    def _theme_all_labels_recursive(self, parent, bg_color, fg_color):
+        """Recursively theme ALL labels in the history tab"""
+        try:
+            for child in parent.winfo_children():
+                if isinstance(child, tk.Label):
+                    try:
+                        child.configure(bg=bg_color, fg=fg_color)
+                    except Exception as e:
+                        logger.debug(f"Could not theme label {child}: {e}")
+                
+                if hasattr(child, 'winfo_children'):
+                    self._theme_all_labels_recursive(child, bg_color, fg_color)
+                    
+        except Exception as e:
+            logger.debug(f"Error in recursive label theming: {e}")
+    
+    def _theme_context_menu(self, bg_color, fg_color, is_dark_mode):
+        """Theme the context menu"""
+        try:
+            if is_dark_mode:
+                self.context_menu.configure(
+                    bg=bg_color,
+                    fg=fg_color,
+                    activebackground="#505050",
+                    activeforeground=fg_color,
+                    relief="flat",
+                    bd=0
+                )
+            else:
+                self.context_menu.configure(
+                    bg=bg_color,
+                    fg=fg_color,
+                    activebackground="#e0e0e0",
+                    activeforeground=fg_color
+                )
+        except Exception as e:
+            logger.debug(f"Could not theme context menu: {e}")
+    
+    def _collect_labels(self, parent):
+        """Collect all Label widgets for efficient theming"""
+        try:
+            for child in parent.winfo_children():
+                if child.winfo_class() == 'Label':
+                    self._label_widgets.append(child)
+                if child.winfo_children():
+                    self._collect_labels(child)
+        except Exception as e:
+            logger.debug(f"Could not collect labels from {parent}: {e}")
+    
+    # ===== DATA MANAGEMENT METHODS =====
     
     def refresh_history(self, event=None):
         """Refresh history display with filters"""
@@ -277,6 +376,36 @@ class HistoryView:
         
         return filtered
     
+    def update_stats_dashboard(self, history):
+        """Update statistics dashboard with current data"""
+        if not history:
+            return
+            
+        total = len(history)
+        working = sum(1 for t in history if t.alive)
+        dead = total - working
+        
+        # Calculate average success rate
+        total_checks = sum(t.check_count for t in history)
+        successful_checks = sum(t.success_count for t in history)
+        avg_success = (successful_checks / total_checks * 100) if total_checks > 0 else 0
+        
+        # Reliability breakdown
+        high_rel = sum(1 for t in history if t.check_count >= 3 and (t.success_count / t.check_count) >= 0.9)
+        medium_rel = sum(1 for t in history if t.check_count >= 3 and 0.7 <= (t.success_count / t.check_count) < 0.9)
+        low_rel = sum(1 for t in history if t.check_count >= 3 and (t.success_count / t.check_count) < 0.7)
+        
+        # Update labels
+        self.total_label.config(text=f"Total: {total}")
+        self.working_label.config(text=f"Working: {working}")
+        self.dead_label.config(text=f"Dead: {dead}")
+        self.success_label.config(text=f"Avg Success: {avg_success:.1f}%")
+        self.reliability_label.config(text=f"High Rel: {high_rel}")
+        self.medium_rel_label.config(text=f"Med Rel: {medium_rel}")
+        self.low_rel_label.config(text=f"Low Rel: {low_rel}")
+    
+    # ===== FILTER AND SEARCH METHODS =====
+    
     def apply_filter(self, event=None):
         """Apply selected filter"""
         self.refresh_history()
@@ -308,6 +437,8 @@ class HistoryView:
                 tracker.check_count,
                 "Favorite"
             ))
+    
+    # ===== CONTEXT MENU AND INTERACTION METHODS =====
     
     def show_context_menu(self, event):
         """Show right-click context menu"""
@@ -347,13 +478,11 @@ class HistoryView:
             values = self.tree.item(item, 'values')
             if values:
                 url = values[0]
-                # This would need integration with your validation system
                 messagebox.showinfo("Re-validate", f"Would re-validate: {url}")
     
     def clear_history(self):
         """Clear all history (with confirmation)"""
         if messagebox.askyesno("Clear History", "Are you sure you want to clear all history? This cannot be undone."):
-            # This would need integration with your database
             messagebox.showinfo("Clear History", "History clearance would be implemented here")
             self.refresh_history()
     

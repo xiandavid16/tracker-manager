@@ -71,6 +71,7 @@ class MainController:
         
         self.is_validating = True
         self.validator.reset_stop_flag()
+        self.validator.is_validating = True  # ADD THIS LINE
         self.trackers.validation_results.clear()
         
         # Convert URLs to Tracker objects
@@ -188,6 +189,7 @@ class MainController:
                 self.view.safe_gui_update(lambda: self.view.show_error(f"Validation failed: {e}"))
         finally:
             self.is_validating = False
+            self.validator.is_validating = False  # ADD THIS LINE
             
     def get_tracker_history(self, limit: int = 100):
         """Get tracker validation history"""
@@ -230,6 +232,7 @@ class MainController:
         """Stop ongoing validation"""
         if self.is_validating:
             self.validator.stop_validation()
+            self.validator.is_validating = False  # ADD THIS LINE
             self.is_validating = False
             logger.info("Validation stopped by user")
     

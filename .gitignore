@@ -4,3 +4,4 @@ tracker_history.db
 tracker_manager_config.json
 tracker_manager.log
 tools/
+working-trackers/
