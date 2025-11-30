@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import logging
@@ -103,6 +104,8 @@ class MainView:
         self.input_text = scrolledtext.ScrolledText(input_frame, height=12, wrap=tk.WORD, font=("Consolas", 9))
         self.input_text.pack(fill='both', expand=True, pady=(0, 10))
         
+        self.setup_input_hint()
+
         # Bind text change event to update counter
         self.input_text.bind('<KeyRelease>', self.update_input_counter)
         
@@ -366,6 +369,39 @@ class MainView:
         else:
             logger.info("Hotkeys disabled (F1 help and Ctrl-X quit still available)")
 
+    def setup_input_hint(self):
+        """Setup input hint that reappears when field is empty and loses focus"""
+        def add_drag_hint():
+            current_content = self.input_text.get('1.0', 'end-1c').strip()
+            if not current_content:
+                self.input_text.insert('1.0', "💡 Paste tracker URLs here or use 'Load from File' button")
+                # Set hint color based on current theme
+                hint_color = 'gray' if not self.is_dark_mode else '#888888'
+                self.input_text.config(fg=hint_color)
+        
+        def clear_hint(event=None):
+            current_content = self.input_text.get('1.0', 'end-1c')
+            if "💡 Paste tracker URLs here" in current_content:
+                self.input_text.delete('1.0', tk.END)
+                # Reset to proper theme color
+                text_fg = self.dark_colors['text_fg'] if self.is_dark_mode else self.light_colors['text_fg']
+                self.input_text.config(fg=text_fg)
+        
+        def check_and_restore_hint(event=None):
+            """Check if field is empty and restore hint when focus is lost"""
+            current_content = self.input_text.get('1.0', 'end-1c').strip()
+            if not current_content:
+                # Small delay to ensure the focus change is complete
+                self.root.after(50, add_drag_hint)
+        
+        # Bind events
+        self.input_text.bind('<FocusIn>', clear_hint)
+        self.input_text.bind('<KeyPress>', clear_hint)
+        self.input_text.bind('<FocusOut>', check_and_restore_hint)  # ADD THIS LINE
+        
+        # Add hint initially
+        self.root.after(100, add_drag_hint)
+        
     # ===== MENU AND WINDOW MANAGEMENT METHODS =====
 
     def create_menu_bar(self):
@@ -774,8 +810,14 @@ Developed with Python and Tkinter"""
             style.configure("TCombobox", 
                         fieldbackground=bg_color,
                         background=bg_color,
-                        foreground=fg_color)
-            
+                        foreground=fg_color,
+                        selectbackground="#e0e0e0",
+                        selectforeground=fg_color)
+            style.map("TCombobox",                       
+                fieldbackground=[('readonly', bg_color)],
+                selectbackground=[('readonly', '#e0e0e0')],
+                background=[('readonly', bg_color)]) 
+
             # Scrollbar styles
             style.configure("Vertical.TScrollbar",
                         background=bg_color,
@@ -826,6 +868,19 @@ Developed with Python and Tkinter"""
                         )
                 except Exception as e:
                     logger.debug(f"Could not theme text widget: {e}")
+
+        if hasattr(self, 'input_text') and self.input_text.winfo_exists():
+            try:
+                current_content = self.input_text.get('1.0', 'end-1c').strip()
+                if not current_content or "💡 Paste tracker URLs here" in current_content:
+
+                    # Clear and re-add hint with proper theme colors
+                    self.input_text.delete('1.0', tk.END)
+                    self.input_text.insert('1.0', "💡 Paste tracker URLs here or use 'Load from File' button")
+                    hint_color = '#888888' if self.is_dark_mode else 'gray'
+                    self.input_text.config(fg=hint_color)
+            except Exception as e:
+                logger.debug(f"Could not re-theme hint: {e}")
         
         # Enhanced combobox theming for dark mode
         if hasattr(self, 'interface_combo') and self.interface_combo.winfo_exists():

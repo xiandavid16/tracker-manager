@@ -1,17 +1,102 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 import logging
 from typing import List
 from models.database_models import TrackerHistory
+import sys
 
 logger = logging.getLogger(__name__)
 
+class DarkTreeview(ttk.Treeview):
+    """A Treeview that properly supports dark mode headers"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._is_dark = False
+        self._style = ttk.Style()
+        
+    def set_dark_mode(self, is_dark):
+        """Enable or disable dark mode"""
+        self._is_dark = is_dark
+        self._update_style()
+        
+    def _update_style(self):
+        """Update the style for dark mode"""
+        try:
+            if self._is_dark:
+                # Configure Treeview for dark mode
+                self._style.configure("Treeview",
+                    background="#2a2a2a",
+                    foreground="#e8e8e8",
+                    fieldbackground="#2a2a2a",
+                    borderwidth=0
+                )
+                
+                # Configure Treeview Heading for dark mode
+                self._style.configure("Treeview.Heading",
+                    background="#404040",
+                    foreground="#e8e8e8",
+                    relief="flat",
+                    borderwidth=1
+                )
+                
+                # Override active state to prevent white hover
+                self._style.map("Treeview.Heading",
+                    background=[('active', '#505050')],
+                    foreground=[('active', '#e8e8e8')]
+                )
+                
+                # Configure selected items
+                self._style.map("Treeview",
+                    background=[('selected', '#505050')],
+                    foreground=[('selected', '#e8e8e8')]
+                )
+                
+            else:
+                # Reset to default styles for light mode
+                self._style.configure("Treeview",
+                    background="white",
+                    foreground="black",
+                    fieldbackground="white"
+                )
+                
+                self._style.configure("Treeview.Heading",
+                    background="#f5f5f5",
+                    foreground="#333333",
+                    relief="raised"
+                )
+                
+                self._style.map("Treeview.Heading",
+                    background=[('active', '#e0e0e0')],
+                    foreground=[('active', '#333333')]
+                )
+                
+                self._style.map("Treeview",
+                    background=[('selected', '#e0e0e0')],
+                    foreground=[('selected', 'black')]
+                )
+                
+            # Force update
+            self.update_idletasks()
+            
+        except Exception as e:
+            logger.debug(f"Treeview theme error: {e}")
+            
 class HistoryView:
     def __init__(self, parent, controller):
         self.parent = parent
         self.controller = controller
+        self.sort_column = None        
+        self.sort_reverse = False
+        self.current_history_data = []
+
         self.setup_gui()
-    
+               
+        # Apply theme after UI is fully loaded
+        self.tab.after(500, self.delayed_theme_refresh)
+        
+        self.refresh_history()
+
     # ===== GUI SETUP METHODS =====
     
     def setup_gui(self):
@@ -41,6 +126,9 @@ class HistoryView:
         ttk.Button(top_controls, text="🧹 Clear History",
                 command=self.clear_history).pack(side='left')
         
+        ttk.Button(top_controls, text="📤 Export (Exclude 0%)", 
+                 command=self.export_excluding_zero_success).pack(side='left', padx=(10, 0))
+
         # Bottom row - filters
         filter_frame = ttk.Frame(controls_frame)
         filter_frame.pack(fill='x')
@@ -68,7 +156,7 @@ class HistoryView:
         self.limit_combo.pack(side='left', padx=(0, 10))
         self.limit_combo.bind('<<ComboboxSelected>>', self.refresh_history)
         
-        # Search box - USE REGULAR TK ENTRY INSTEAD OF TTK FOR BETTER THEMING
+        # Search box - USED REGULAR TK ENTRY INSTEAD OF TTK FOR BETTER THEMING
         ttk.Label(filter_frame, text="Search:").pack(side='left', padx=(20, 5))
         self.search_var = tk.StringVar()
         self.search_entry = tk.Entry(filter_frame, textvariable=self.search_var, width=20,  # Changed to tk.Entry
@@ -81,16 +169,16 @@ class HistoryView:
         
         # Enhanced history table
         columns = ('URL', 'Status', 'Response Time', 'Last Checked', 'Success Rate', 'Checks', 'Type')
-        self.tree = ttk.Treeview(self.tab, columns=columns, show='headings', height=15)
-        
+        self.tree = DarkTreeview(self.tab, columns=columns, show='headings', height=15) 
+
         # Configure columns
-        self.tree.heading('URL', text='URL')
-        self.tree.heading('Status', text='Status')
-        self.tree.heading('Response Time', text='Response Time')
-        self.tree.heading('Last Checked', text='Last Checked')
-        self.tree.heading('Success Rate', text='Success Rate')
-        self.tree.heading('Checks', text='Checks')
-        self.tree.heading('Type', text='Type')
+        self.tree.heading('URL', text='URL', command=lambda: self.sort_by_column('URL'))
+        self.tree.heading('Status', text='Status', command=lambda: self.sort_by_column('Status'))
+        self.tree.heading('Response Time', text='Response Time', command=lambda: self.sort_by_column('Response Time'))
+        self.tree.heading('Last Checked', text='Last Checked', command=lambda: self.sort_by_column('Last Checked'))
+        self.tree.heading('Success Rate', text='Success Rate', command=lambda: self.sort_by_column('Success Rate'))
+        self.tree.heading('Checks', text='Checks', command=lambda: self.sort_by_column('Checks'))
+        self.tree.heading('Type', text='Type', command=lambda: self.sort_by_column('Type'))
         
         self.tree.column('URL', width=280, anchor='w')
         self.tree.column('Status', width=80, anchor='center')
@@ -113,7 +201,7 @@ class HistoryView:
         # Enhanced bindings
         self.tree.bind('<Double-1>', self.on_double_click)
         self.tree.bind('<Button-3>', self.show_context_menu)
-        
+
         # Context menu
         self.context_menu = tk.Menu(self.tab, tearoff=0)
         self.context_menu.add_command(label="Add to Favorites", command=self.add_selected_to_favorites)
@@ -128,7 +216,7 @@ class HistoryView:
         self.refresh_history()
     
     def setup_stats_dashboard(self):
-        """Setup icon-based mini dashboard"""
+        """Setup icon-based mini dashboard that follows clam theme"""
         stats_frame = ttk.LabelFrame(self.tab, text="Quick Stats", padding=8)
         stats_frame.pack(fill='x', padx=5, pady=5)
         
@@ -148,41 +236,122 @@ class HistoryView:
         
         self.stat_labels = {}
         for i, (icon, key, text) in enumerate(stats_data):
+            # Use ttk.Frame for consistent theming
             frame = ttk.Frame(stats_grid)
             frame.grid(row=0, column=i, padx=8, pady=2)
             
-            icon_label = tk.Label(frame, text=icon, font=("Arial", 10))
+            # Use ttk.Label for icons to match theme
+            icon_label = ttk.Label(frame, text=icon, font=("Arial", 10))
             icon_label.pack(side='left')
             
-            stat_label = tk.Label(frame, text=text, font=("Arial", 9))
+            # Use ttk.Label for stats to match theme
+            stat_label = ttk.Label(frame, text=text, font=("Arial", 9))
             stat_label.pack(side='left', padx=(2, 0))
             
             self.stat_labels[key] = stat_label
+        
+        # Store references to the main stat labels for theming
+        self.total_label = self.stat_labels['total']
+        self.working_label = self.stat_labels['working']
+        self.dead_label = self.stat_labels['dead']
+        self.success_label = self.stat_labels['success']
+        self.reliability_label = self.stat_labels['high']
+        self.medium_rel_label = self.stat_labels['medium']
+        self.low_rel_label = self.stat_labels['low']
     
-    # ===== SIMPLIFIED THEMING METHODS =====
-    
+    # ===== THEMING METHODS =====
+
+    def delayed_theme_refresh(self):
+        """Refresh theme after UI is fully loaded"""
+        try:
+            print("Delayed theme refresh for history view", file=sys.stderr)
+            # Re-apply theme after a short delay
+            self.tab.after(1000, lambda: self.apply_theme("#2a2a2a", "#e8e8e8", "#2a2a2a", "#e8e8e8"))
+        except Exception as e:
+            print(f"Delayed theme error: {e}", file=sys.stderr)
+
+    #def _bind_header_debug(self):
+        """Bind debug events to headers"""
+        try:
+            def on_enter(event):
+                widget = event.widget
+                print(f"Mouse ENTERED: {widget} - Class: {widget.winfo_class()}", file=sys.stderr)
+                try:
+                    print(f"  BG: {widget.cget('background')}, FG: {widget.cget('foreground')}", file=sys.stderr)
+                except:
+                    print("  Could not get colors", file=sys.stderr)
+                
+            def on_leave(event):
+                print(f"Mouse LEFT: {event.widget}", file=sys.stderr)
+                
+            # Bind to the treeview and all its children
+            self.tree.bind('<Enter>', on_enter)
+            self.tree.bind('<Leave>', on_leave)
+            
+            # Also try to bind to any existing headers
+            def bind_headers():
+                for child in self.tree.winfo_children():
+                    for grandchild in child.winfo_children():
+                        if grandchild.winfo_class() in ['TButton', 'Button']:
+                            grandchild.bind('<Enter>', on_enter)
+                            grandchild.bind('<Leave>', on_leave)
+                            print(f"Bound to header: {grandchild}", file=sys.stderr)
+            
+            # Bind after a short delay to ensure headers exist
+            self.tree.after(1000, bind_headers)
+            
+        except Exception as e:
+            print(f"Header debug bind failed: {e}", file=sys.stderr) 
+
     def apply_theme(self, bg_color, fg_color, text_bg, text_fg):
         """Apply theme to history tab widgets - SIMPLIFIED AND FOCUSED"""
         try:
-            # Get dark mode state from main view
-            is_dark_mode = getattr(self.controller.main_view, 'is_dark_mode', False)
+            # Get dark mode state safely
+            is_dark_mode = False
+            try:
+                # Try multiple ways to get dark mode state
+                if hasattr(self.controller, 'main_view') and hasattr(self.controller.main_view, 'is_dark_mode'):
+                    is_dark_mode = self.controller.main_view.is_dark_mode
+                elif hasattr(self.controller, 'is_dark_mode'):
+                    is_dark_mode = self.controller.is_dark_mode
+                else:
+                    # Fallback: check if we're using dark colors
+                    is_dark_mode = bg_color != "#f0f0f0"  # Light mode default
+            except:
+                is_dark_mode = False
+            
+            print(f"=== APPLYING HISTORY THEME (dark: {is_dark_mode}) ===", file=sys.stderr)
             
             if is_dark_mode:
-                # DARK MODE - Direct and simple approach
+                # DARK MODE
                 self._apply_dark_theme(bg_color, fg_color)
+                
+                # Use our custom treeview's dark mode
+                if hasattr(self.tree, 'set_dark_mode'):
+                    self.tree.set_dark_mode(True)
+                    print("Applied dark mode to custom treeview", file=sys.stderr)
+                    
             else:
                 # LIGHT MODE
                 self._apply_light_theme(bg_color, fg_color, text_bg)
-            
+                
+                # Use light mode
+                if hasattr(self.tree, 'set_dark_mode'):
+                    self.tree.set_dark_mode(False)
+                    print("Applied light mode to custom treeview", file=sys.stderr)
+                
             # Theme all labels
             self._theme_all_labels(bg_color, fg_color, is_dark_mode)
             
             # Theme context menu
             self._theme_context_menu(bg_color, fg_color, is_dark_mode)
             
+            print("=== HISTORY THEME APPLIED ===", file=sys.stderr)
+            
         except Exception as e:
             logger.debug(f"Could not theme history view: {e}")
-    
+            print(f"History theme error: {e}", file=sys.stderr)
+
     def _apply_dark_theme(self, bg_color, fg_color):
         """Apply dark theme - FOCUSED ON SEARCH BAR"""
         dark_bg = "#2a2a2a"
@@ -234,7 +403,7 @@ class HistoryView:
                 except:
                     pass
     
-    def _theme_all_labels(self, bg_color, fg_color, is_dark_mode):
+    #def _theme_all_labels(self, bg_color, fg_color, is_dark_mode):
         """Theme all labels in the history tab"""
         # Apply to collected labels
         for label in self._label_widgets:
@@ -255,7 +424,7 @@ class HistoryView:
         # Apply recursive theming to catch any missed labels
         self._theme_all_labels_recursive(self.tab, bg_color, fg_color)
     
-    def _theme_all_labels_recursive(self, parent, bg_color, fg_color):
+    #def _theme_all_labels_recursive(self, parent, bg_color, fg_color):
         """Recursively theme ALL labels in the history tab"""
         try:
             for child in parent.winfo_children():
@@ -303,49 +472,60 @@ class HistoryView:
                     self._collect_labels(child)
         except Exception as e:
             logger.debug(f"Could not collect labels from {parent}: {e}")
-    
+    #===
+    #===
     # ===== DATA MANAGEMENT METHODS =====
-    
+
+    def export_excluding_zero_success(self):
+        """Export all trackers except those with 0% success rate"""
+        try:
+            trackers = self.get_trackers_excluding_zero_success()
+            
+            if not trackers:
+                messagebox.showinfo("No Data", "No trackers to export (all have 0% success rate)")
+                return
+            
+            # Create export content
+            content = "\n".join([tracker.url for tracker in trackers])
+            
+            # Ask for file location
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+                title="Export Trackers (Excluding 0% Success)"
+            )
+            
+            if file_path:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                zero_count = len([t for t in self.controller.get_tracker_history() if t.check_count > 0 and (t.success_count / t.check_count) == 0])
+                messagebox.showinfo("Export Complete", 
+                                f"Exported {len(trackers)} trackers (excluding {zero_count} with 0% success rate)\n\nFile: {file_path}")
+                self.controller.main_view.update_status(f"Exported {len(trackers)} trackers excluding {zero_count} with 0% success")
+                
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Could not export: {e}")
+
+    def get_trackers_excluding_zero_success(self):
+        """Get all trackers except those with 0% success rate"""
+        history = self.controller.get_tracker_history(limit=1000)  # Get all history
+        return [tracker for tracker in history if tracker.check_count == 0 or (tracker.success_count / tracker.check_count) > 0]
+
     def refresh_history(self, event=None):
-        """Refresh history display with filters"""
+        """Refresh history display with filters and sorting"""
         for item in self.tree.get_children():
             self.tree.delete(item)
         
         limit = None if self.limit_var.get() == "All" else int(self.limit_var.get())
         history = self.controller.get_tracker_history(limit=limit or 1000)
         
-        # Apply filters
+        # Apply filters and store the result
         filtered_history = self.apply_filters_to_history(history)
+        self.current_history_data = filtered_history  # Store for sorting
         
-        for tracker in filtered_history:
-            success_rate = (tracker.success_count / tracker.check_count * 100) if tracker.check_count > 0 else 0
-            
-            # Color coding based on reliability
-            status_icon = "✅" if tracker.alive else "❌"
-            if tracker.check_count >= 3:
-                if success_rate >= 90:
-                    status_icon = "🟢" if tracker.alive else "🔴"
-                elif success_rate >= 70:
-                    status_icon = "🟡" if tracker.alive else "🟠"
-            
-            # Determine tracker type from URL
-            tracker_type = "Unknown"
-            if tracker.url.startswith('udp://'):
-                tracker_type = "UDP"
-            elif tracker.url.startswith(('http://', 'https://')):
-                tracker_type = "HTTP"
-            elif tracker.url.startswith('magnet:'):
-                tracker_type = "Magnet"
-            
-            self.tree.insert('', 'end', values=(
-                tracker.url,
-                f"{status_icon} {'Working' if tracker.alive else 'Dead'}",
-                f"{tracker.response_time:.2f}s" if tracker.response_time else "N/A",
-                tracker.last_checked[:19] if tracker.last_checked else "Never",
-                f"{success_rate:.1f}%",
-                tracker.check_count,
-                tracker_type
-            ))
+        # Display with current sorting (or default if no sorting set)
+        self.display_sorted_data()
         
         self.update_stats_dashboard(history)
     
@@ -403,7 +583,102 @@ class HistoryView:
         self.low_rel_label.config(text=f"Low Rel: {low_rel}")
     
     # ===== FILTER AND SEARCH METHODS =====
-    
+
+    def sort_by_column(self, column):
+        """Sort treeview by clicked column with visual indicators and proper theming"""
+        # Toggle sort direction if same column clicked again
+        if self.sort_column == column:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_column = column
+            self.sort_reverse = False
+        
+        # Update column headers with sort indicators
+        for col in ['URL', 'Status', 'Response Time', 'Last Checked', 'Success Rate', 'Checks', 'Type']:
+            current_text = self.tree.heading(col, 'text')
+            # Remove existing sort indicators
+            clean_text = current_text.replace(' ▲', '').replace(' ▼', '')
+            if col == column:
+                # Add new sort indicator
+                indicator = ' ▼' if self.sort_reverse else ' ▲'
+                self.tree.heading(col, text=clean_text + indicator)
+            else:
+                self.tree.heading(col, text=clean_text)
+        
+        # Re-display data with new sort order
+        self.display_sorted_data()
+
+    def display_sorted_data(self):
+        """Display data sorted by current sort column and direction"""
+        if not self.current_history_data:
+            return
+        
+        # Clear current display
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        # Sort the data
+        sorted_data = self.apply_sorting(self.current_history_data)
+        
+        # Re-insert sorted data
+        for tracker in sorted_data:
+            success_rate = (tracker.success_count / tracker.check_count * 100) if tracker.check_count > 0 else 0
+            
+            status_icon = "✅" if tracker.alive else "❌"
+            if tracker.check_count >= 3:
+                if success_rate >= 90:
+                    status_icon = "🟢" if tracker.alive else "🔴"
+                elif success_rate >= 70:
+                    status_icon = "🟡" if tracker.alive else "🟠"
+            
+            tracker_type = "Unknown"
+            if tracker.url.startswith('udp://'):
+                tracker_type = "UDP"
+            elif tracker.url.startswith(('http://', 'https://')):
+                tracker_type = "HTTP"
+            elif tracker.url.startswith('magnet:'):
+                tracker_type = "Magnet"
+            
+            self.tree.insert('', 'end', values=(
+                tracker.url,
+                f"{status_icon} {'Working' if tracker.alive else 'Dead'}",
+                f"{tracker.response_time:.2f}s" if tracker.response_time else "N/A",
+                tracker.last_checked[:19] if tracker.last_checked else "Never",
+                f"{success_rate:.1f}%",
+                tracker.check_count,
+                tracker_type
+            ))
+
+    def apply_sorting(self, data):
+            """Apply sorting to data based on current sort column"""
+            if not self.sort_column:
+                return data
+            
+            def sort_key(tracker):
+                if self.sort_column == 'URL':
+                    return tracker.url.lower()
+                elif self.sort_column == 'Status':
+                    return tracker.alive
+                elif self.sort_column == 'Response Time':
+                    return tracker.response_time or 0
+                elif self.sort_column == 'Last Checked':
+                    return tracker.last_checked or ''
+                elif self.sort_column == 'Success Rate':
+                    return (tracker.success_count / tracker.check_count) if tracker.check_count > 0 else 0
+                elif self.sort_column == 'Checks':
+                    return tracker.check_count
+                elif self.sort_column == 'Type':
+                    if tracker.url.startswith('udp://'):
+                        return 'UDP'
+                    elif tracker.url.startswith(('http://', 'https://')):
+                        return 'HTTP'
+                    elif tracker.url.startswith('magnet:'):
+                        return 'Magnet'
+                    return 'Unknown'
+                return ''
+            
+            return sorted(data, key=sort_key, reverse=self.sort_reverse)
+
     def apply_filter(self, event=None):
         """Apply selected filter"""
         self.refresh_history()
@@ -438,6 +713,20 @@ class HistoryView:
     
     # ===== CONTEXT MENU AND INTERACTION METHODS =====
     
+    #def refresh_treeview_headers(self):
+        """Force refresh treeview headers to apply theme"""
+        try:
+
+            
+            # Update all column headings to trigger redraw
+            for col in ['URL', 'Status', 'Response Time', 'Last Checked', 'Success Rate', 'Checks', 'Type']:
+                current_text = self.tree.heading(col, 'text')
+                self.tree.heading(col, text=current_text)  # Reset to force redraw
+            
+            self.tree.update_idletasks()
+        except Exception as e:
+            logger.debug(f"Could not refresh treeview headers: {e}")
+
     def show_context_menu(self, event):
         """Show right-click context menu"""
         item = self.tree.identify_row(event.y)

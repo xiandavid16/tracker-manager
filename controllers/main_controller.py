@@ -21,6 +21,8 @@ class MainController:
         self.parser = TrackerParser()
         self.validator = TrackerValidator(self.config)
         self.database = TrackerDatabase()
+        self.database = TrackerDatabase()
+        self.init_database()
         
         self.view = None  # Will be set by the view
         self.validation_thread = None
