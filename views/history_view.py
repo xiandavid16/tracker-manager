@@ -128,38 +128,36 @@ class HistoryView:
         self.refresh_history()
     
     def setup_stats_dashboard(self):
-        """Setup statistics dashboard"""
-        stats_frame = ttk.LabelFrame(self.tab, text="Statistics Dashboard", padding=10)
+        """Setup icon-based mini dashboard"""
+        stats_frame = ttk.LabelFrame(self.tab, text="Quick Stats", padding=8)
         stats_frame.pack(fill='x', padx=5, pady=5)
         
         stats_grid = ttk.Frame(stats_frame)
         stats_grid.pack(fill='x')
         
-        # Total trackers
-        self.total_label = tk.Label(stats_grid, text="Total: 0", font=("Arial", 10, "bold"))
-        self.total_label.grid(row=0, column=0, padx=10, pady=2, sticky='w')
+        # Compact grid with icons
+        stats_data = [
+            ('📊', 'total', 'Total: 0'),
+            ('✅', 'working', 'Working: 0'), 
+            ('🟢', 'high', 'High: 0'),
+            ('🟡', 'medium', 'Med: 0'),
+            ('🔴', 'low', 'Low: 0'),
+            ('❌', 'dead', 'Dead: 0'),
+            ('📈', 'success', 'Success: 0%')
+        ]
         
-        # Working trackers
-        self.working_label = tk.Label(stats_grid, text="Working: 0", font=("Arial", 10, "bold"), fg="green")
-        self.working_label.grid(row=0, column=1, padx=10, pady=2, sticky='w')
-        
-        # Dead trackers
-        self.dead_label = tk.Label(stats_grid, text="Dead: 0", font=("Arial", 10, "bold"), fg="red")
-        self.dead_label.grid(row=0, column=2, padx=10, pady=2, sticky='w')
-        
-        # Success rate
-        self.success_label = tk.Label(stats_grid, text="Avg Success: 0%", font=("Arial", 10, "bold"))
-        self.success_label.grid(row=0, column=3, padx=10, pady=2, sticky='w')
-        
-        # Reliability breakdown
-        self.reliability_label = tk.Label(stats_grid, text="High Rel: 0", font=("Arial", 9))
-        self.reliability_label.grid(row=1, column=0, padx=10, pady=2, sticky='w')
-        
-        self.medium_rel_label = tk.Label(stats_grid, text="Med Rel: 0", font=("Arial", 9))
-        self.medium_rel_label.grid(row=1, column=1, padx=10, pady=2, sticky='w')
-        
-        self.low_rel_label = tk.Label(stats_grid, text="Low Rel: 0", font=("Arial", 9))
-        self.low_rel_label.grid(row=1, column=2, padx=10, pady=2, sticky='w')
+        self.stat_labels = {}
+        for i, (icon, key, text) in enumerate(stats_data):
+            frame = ttk.Frame(stats_grid)
+            frame.grid(row=0, column=i, padx=8, pady=2)
+            
+            icon_label = tk.Label(frame, text=icon, font=("Arial", 10))
+            icon_label.pack(side='left')
+            
+            stat_label = tk.Label(frame, text=text, font=("Arial", 9))
+            stat_label.pack(side='left', padx=(2, 0))
+            
+            self.stat_labels[key] = stat_label
     
     # ===== SIMPLIFIED THEMING METHODS =====
     
@@ -481,10 +479,53 @@ class HistoryView:
                 messagebox.showinfo("Re-validate", f"Would re-validate: {url}")
     
     def clear_history(self):
-        """Clear all history (with confirmation)"""
-        if messagebox.askyesno("Clear History", "Are you sure you want to clear all history? This cannot be undone."):
-            messagebox.showinfo("Clear History", "History clearance would be implemented here")
-            self.refresh_history()
+        """Clear all history (with confirmation and proper implementation)"""
+        # Get current stats for confirmation message
+        try:
+            stats = self.controller.database.get_history_stats()
+            
+            if stats['trackers'] == 0 and stats['sessions'] == 0:
+                messagebox.showinfo("Clear History", "History is already empty!")
+                return
+            
+            # Create detailed confirmation message
+            confirmation_msg = [
+                "Are you sure you want to clear ALL history?",
+                "This cannot be undone!",
+                "",
+                f"• Trackers: {stats['trackers']} records",
+                f"• Validation Sessions: {stats['sessions']} records",
+                f"• Favorites: {stats['favorites']} records",
+                "",
+                "This will remove all tracker validation history and statistics."
+            ]
+            
+            if messagebox.askyesno("Clear History - CONFIRM", "\n".join(confirmation_msg)):
+                # Ask if they want to preserve favorites
+                preserve_favorites = True
+                if stats['favorites'] > 0:
+                    preserve_favorites = messagebox.askyesno(
+                        "Preserve Favorites?", 
+                        f"Do you want to preserve your {stats['favorites']} favorite trackers?"
+                    )
+                
+                # Perform the clearing
+                if preserve_favorites:
+                    self.controller.database.clear_tracker_history()
+                    action = "History cleared (favorites preserved)"
+                else:
+                    self.controller.database.clear_all_history()
+                    action = "All history cleared including favorites"
+                
+                # Refresh the display
+                self.refresh_history()
+                
+                # Show completion message
+                messagebox.showinfo("Clear History", f"{action}!\n\nAll history has been cleared successfully.")
+                
+        except Exception as e:
+            logger.error(f"Error clearing history: {e}")
+            messagebox.showerror("Error", f"Could not clear history: {e}")
     
     def on_double_click(self, event):
         """Add double-clicked tracker to favorites"""

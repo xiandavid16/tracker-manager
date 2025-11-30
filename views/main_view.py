@@ -266,18 +266,23 @@ class MainView:
         text_container = ttk.Frame(results_frame)
         text_container.pack(fill='both', expand=True)
         
-        # Working trackers - left side
+        # Configure grid for equal 50/50 split
+        text_container.columnconfigure(0, weight=1)
+        text_container.columnconfigure(1, weight=1)
+        text_container.rowconfigure(0, weight=1)
+
+        # Working trackers - left side (50%)
         working_container = ttk.Frame(text_container)
-        working_container.pack(side='left', fill='both', expand=True, padx=(0, 2))
-        
-        self.working_text = scrolledtext.ScrolledText(working_container, height=10, wrap=tk.WORD)
+        working_container.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
+
+        self.working_text = scrolledtext.ScrolledText(working_container, height=10, wrap=tk.NONE)  # No word wrap!
         self.working_text.pack(fill='both', expand=True, padx=5, pady=5)
-        
-        # Dead trackers - right side
+
+        # Dead trackers - right side (50%)  
         dead_container = ttk.Frame(text_container)
-        dead_container.pack(side='right', fill='both', expand=True, padx=(2, 0))
-        
-        self.dead_text = scrolledtext.ScrolledText(dead_container, height=10, wrap=tk.WORD)
+        dead_container.grid(row=0, column=1, sticky='nsew', padx=(2, 0))
+
+        self.dead_text = scrolledtext.ScrolledText(dead_container, height=10, wrap=tk.NONE)  # No word wrap!
         self.dead_text.pack(fill='both', expand=True, padx=5, pady=5)
 
     def setup_results_tab(self):

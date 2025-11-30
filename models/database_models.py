@@ -88,6 +88,62 @@ class TrackerDatabase:
             
             conn.commit()
     
+    def clear_all_history(self): 
+        """Clear all tracker history and validation sessions"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Clear trackers table (this will cascade to favorites due to foreign key)
+            cursor.execute('DELETE FROM trackers')
+            
+            # Clear validation sessions
+            cursor.execute('DELETE FROM validation_sessions')
+            
+            # Reset favorites (optional - remove if you want to keep favorites)
+            cursor.execute('DELETE FROM favorites')
+            
+            conn.commit()
+        
+        logger.info("All history cleared from database")
+
+    def clear_tracker_history(self):
+        """Clear only tracker history but keep favorites"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Clear trackers that are not in favorites
+            cursor.execute('''
+                DELETE FROM trackers 
+                WHERE id NOT IN (SELECT tracker_id FROM favorites WHERE tracker_id IS NOT NULL)
+            ''')
+            
+            # Clear validation sessions
+            cursor.execute('DELETE FROM validation_sessions')
+            
+            conn.commit()
+        
+        logger.info("Tracker history cleared (favorites preserved)")
+
+    def get_history_stats(self):
+        """Get counts for confirmation dialog"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT COUNT(*) FROM trackers')
+            tracker_count = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM validation_sessions') 
+            session_count = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM favorites')
+            favorite_count = cursor.fetchone()[0]
+            
+        return {
+            'trackers': tracker_count,
+            'sessions': session_count,
+            'favorites': favorite_count
+        }  
+        
     # ===== TRACKER DATA MANAGEMENT METHODS =====
     
     def save_tracker_result(self, tracker: 'Tracker') -> int:
